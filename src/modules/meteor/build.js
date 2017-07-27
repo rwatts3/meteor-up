@@ -1,19 +1,27 @@
 var spawn = require('child_process').spawn;
 var archiver = require('archiver');
 var fs = require('fs');
-
-import { resolvePath } from '../utils';
 var _ = require('underscore');
+import { resolvePath } from '../utils';
+import debug from 'debug';
 
-function buildApp(appPath, buildOptions) {
+const log = debug('mup:module:meteor');
+
+function buildApp(appPath, buildOptions, verbose) {
   // Check if the folder exists
   try {
     fs.statSync(resolvePath(appPath));
   } catch (e) {
-    console.log(e);
-    console.log(`${resolvePath(appPath)} does not exist`);
+
+    if (e.code === 'ENOENT') {
+      console.log(`${resolvePath(appPath)} does not exist`);
+    } else {
+      console.log(e);
+    }
+
     process.exit(1);
   }
+
   // Make sure it is a Meteor app
   try {
     // checks for release file since there also is a
@@ -27,22 +35,23 @@ function buildApp(appPath, buildOptions) {
   return new Promise((resolve, reject) => {
     const callback = err => {
       if (err) {
-        return reject(err);
+        reject(err);
+        return;
       }
       resolve();
     };
-    buildMeteorApp(appPath, buildOptions, function(code) {
+    buildMeteorApp(appPath, buildOptions, verbose, function(code) {
       if (code === 0) {
         archiveIt(buildOptions.buildLocation, callback);
         return;
       }
       console.log('\n=> Build Error. Check the logs printed above.');
-      callback(new Error('build-error'));
+      process.exit(1);
     });
   });
 }
 
-function buildMeteorApp(appPath, buildOptions, callback) {
+function buildMeteorApp(appPath, buildOptions, verbose, callback) {
   var executable = buildOptions.executable || 'meteor';
   var args = [
     'build',
@@ -85,15 +94,29 @@ function buildMeteorApp(appPath, buildOptions, callback) {
     args = ['/c', 'meteor'].concat(args);
   }
 
-  var options = { cwd: appPath };
+  var options = {
+    cwd: appPath,
+    env: {
+      ...process.env,
+      METEOR_HEADLESS: 1
+    },
+    stdio: verbose ? 'inherit' : 'pipe'
+  };
+
+  log(`Build Path: ${appPath}`);
+  log(`Build Command:  ${executable} ${args.join(' ')}`);
+
   var meteor = spawn(executable, args, options);
 
-  meteor.stdout.pipe(process.stdout, { end: false });
-  meteor.stderr.pipe(process.stderr, { end: false });
+  if (!verbose) {
+    meteor.stdout.pipe(process.stdout, { end: false });
+    meteor.stderr.pipe(process.stderr, { end: false });
+  }
 
   meteor.on('error', e => {
     console.log(options);
     console.log(e);
+    console.log('This error usually happens when meteor is not installed.');
   });
   meteor.on('close', callback);
 }

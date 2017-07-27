@@ -30,7 +30,7 @@ describe('module - meteor', function() {
       await runSSHCommand(serverInfo, 'rm -rf /opt/myapp || :');
       await runSSHCommand(
         serverInfo,
-        'sudo apt-get -qq update && sudo apt-get -qq install -y tree'
+        'command -v tree >/dev/null 2>&1 || { sudo apt-get -qq update && sudo apt-get -qq install -y tree; }'
       );
 
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
@@ -54,9 +54,10 @@ describe('module - meteor', function() {
 
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
 
+      sh.exec('mup docker setup');
       sh.exec('mup meteor setup');
 
-      const out = sh.exec('mup meteor push');
+      const out = sh.exec('mup meteor push --cached-build');
       assert.equal(out.code, 0);
 
       const num = countOccurences(
@@ -70,18 +71,12 @@ describe('module - meteor', function() {
         'ls -al /opt/myapp/tmp/bundle.tar.gz'
       );
       assert.equal(sshOut.code, 0);
-
-      const sshOut2 = await runSSHCommand(
-        serverInfo,
-        'ls -al /opt/myapp/config/start.sh'
-      );
-      assert.equal(sshOut2.code, 0);
     });
   });
 
   describe('envconfig', function() {
     const serverInfo = servers['mymeteor'];
-    it('should send the enviranment variables to "meteor" vm', async () => {
+    it('should send the environment variables to "meteor" vm', async () => {
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
 
       sh.exec('mup meteor setup');
@@ -100,6 +95,13 @@ describe('module - meteor', function() {
         'ls -al /opt/myapp/config/env.list'
       );
       assert.equal(sshOut.code, 0);
+
+      const sshOut2 = await runSSHCommand(
+        serverInfo,
+        'ls -al /opt/myapp/config/start.sh'
+      );
+
+      assert.equal(sshOut2.code, 0);
     });
   });
 
@@ -109,7 +111,7 @@ describe('module - meteor', function() {
     it('should start meteor on "meteor" vm', async () => {
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
 
-      sh.exec('mup setup && mup meteor push && mup meteor envconfig');
+      sh.exec('mup setup && mup meteor push --cached-build && mup meteor envconfig');
       const out = sh.exec('mup meteor start');
       assert.equal(out.code, 0);
 
@@ -160,7 +162,7 @@ describe('module - meteor', function() {
     it('should pull the logs from "meteor" vm', async () => {
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
 
-      const out = sh.exec('mup meteor logs');
+      const out = sh.exec('mup meteor logs --tail 2');
       assert.equal(out.code, 0);
     });
   });
@@ -170,7 +172,7 @@ describe('module - meteor', function() {
     it('should stop meteor app on "meteor" vm', async () => {
       sh.cd(path.resolve('/tmp', 'tests/project-1'));
 
-      sh.exec('mup setup && mup deploy');
+      sh.exec('mup setup && mup deploy --cached-build');
       const out = sh.exec('mup meteor stop');
       assert.equal(out.code, 0);
 

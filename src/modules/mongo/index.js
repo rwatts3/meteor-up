@@ -18,41 +18,50 @@ export function logs(api) {
 
   const args = api.getArgs();
   const sessions = api.getSessions(['mongo']);
+  args.shift(); // remove mongo from args sent to docker
   return getDockerLogs('mongodb', sessions, args);
 }
 
 export function setup(api) {
   log('exec => mup mongo setup');
 
+  if (!api.getConfig().mongo) {
+    // could happen when running "mup mongo setup"
+    console.log(
+      'Not setting up built-in mongodb since there is no mongo config'
+    );
+    return;
+  }
+
   const mongoSessions = api.getSessions(['mongo']);
   const meteorSessions = api.getSessions(['meteor']);
 
   if (meteorSessions.length !== 1) {
     console.log(
-      'To use mup inbuilt mongodb setup, you should have only one meteor app server. To have more app servers, use an external mongodb setup'
+      'To use mup built-in mongodb setup, you should have only one meteor app server. To have more app servers, use an external mongodb setup'
     );
     return;
   } else if (mongoSessions[0]._host !== meteorSessions[0]._host) {
     console.log(
-      'To use mup inbuilt mongodb setup, you should have both meteor app and mongodb on the same server'
+      'To use mup built-in mongodb setup, you should have both meteor app and mongodb on the same server'
     );
     return;
   }
 
   const list = nodemiral.taskList('Setup Mongo');
 
-  list.executeScript('setup environment', {
+  list.executeScript('Setup Environment', {
     script: resolvePath(__dirname, 'assets/mongo-setup.sh')
   });
 
-  list.copy('copying mongodb.conf', {
+  list.copy('Copying mongodb.conf', {
     src: resolvePath(__dirname, 'assets/mongodb.conf'),
     dest: '/opt/mongodb/mongodb.conf'
   });
 
   const sessions = api.getSessions(['mongo']);
 
-  return runTaskList(list, sessions);
+  return runTaskList(list, sessions, { verbose: api.getVerbose() });
 }
 
 export function start(api) {
@@ -64,7 +73,7 @@ export function start(api) {
 
   if (
     meteorSessions.length !== 1 ||
-      mongoSessions[0]._host !== meteorSessions[0]._host
+    mongoSessions[0]._host !== meteorSessions[0]._host
   ) {
     log('Skipping mongodb start. Incompatible config');
     return;
@@ -72,15 +81,16 @@ export function start(api) {
 
   const list = nodemiral.taskList('Start Mongo');
 
-  list.executeScript('start mongo', {
+  list.executeScript('Start Mongo', {
     script: resolvePath(__dirname, 'assets/mongo-start.sh'),
     vars: {
-      mongoVersion: config.version || '3.4.1'
+      mongoVersion: config.version || '3.4.1',
+      mongoDbDir: '/var/lib/mongodb'
     }
   });
 
   const sessions = api.getSessions(['mongo']);
-  return runTaskList(list, sessions);
+  return runTaskList(list, sessions, { verbose: api.getVerbose() });
 }
 
 export function stop(api) {
@@ -92,5 +102,5 @@ export function stop(api) {
   });
 
   const sessions = api.getSessions(['mongo']);
-  return runTaskList(list, sessions);
+  return runTaskList(list, sessions, { verbose: api.getVerbose() });
 }

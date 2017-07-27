@@ -1,21 +1,23 @@
-import { combineErrorDetails, improveErrors } from './utils';
+import { VALIDATE_OPTIONS, combineErrorDetails, improveErrors } from './utils';
 
 import joi from 'joi';
 import validateMeteor from './meteor';
 import validateMongo from './mongo';
 import validateServer from './servers';
+import validateProxy from './proxy';
 
 const schema = joi.object().keys({
-  servers: joi.object(),
+  servers: joi.object().required(),
   meteor: joi.object(),
-  mongo: joi.object()
+  mongo: joi.object(),
+  proxy: joi.object()
 });
 
 function validateAll(config) {
   let details = [];
   let results;
 
-  results = joi.validate(config, schema);
+  results = joi.validate(config, schema, VALIDATE_OPTIONS);
   details = combineErrorDetails(details, results);
 
   if (config.servers) {
@@ -33,29 +35,17 @@ function validateAll(config) {
     details = combineErrorDetails(details, results);
   }
 
+  if (config.proxy) {
+    results = validateProxy(config);
+    details = combineErrorDetails(details, results);
+  }
+
   return details.map(improveErrors);
 }
 
 export default function validate(config) {
   let errors = validateAll(config);
-  return {
-    errors: errors.reduce((result, error) => {
-      if (!error.warning) {
-        result.push(error.message);
-      }
-      return result;
-    }, []),
-    warnings: errors.reduce((result, error) => {
-      if (error.warning) {
-        result.push(error.message);
-      }
-      return result;
-    }, []),
-    hasErrors: errors.reduce((result, error) => {
-      if (error.warning !== true) {
-        return true;
-      }
-      return false;
-    }, false)
-  };
+  return errors.map((error) => {
+    return error.message;
+  });
 }

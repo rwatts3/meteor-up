@@ -1,0 +1,20 @@
+sudo: required
+
+language: node_js
+node_js:
+  - "4"
+  - "6"
+
+env:
+  - TEST_MODULE='modules/default'
+  - TEST_MODULE='modules/meteor'
+  - TEST_MODULE='modules/mongo'
+  - TEST_MODULE='modules/docker'
+
+services:
+  - docker
+
+before_script:
+  - echo 'DOCKER_OPTS="--storage-driver=devicemapper"' | sudo tee --append /etc/default/docker >/dev/null && sudo service docker restart
+
+script: npm run test -- "$TEST_MODULE"

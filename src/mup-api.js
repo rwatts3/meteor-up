@@ -1,3 +1,4 @@
+import chalk from 'chalk';
 import fs from 'fs';
 import nodemiral from 'nodemiral';
 import parseJson from 'parse-json';
@@ -6,7 +7,7 @@ import { resolvePath } from './modules/utils';
 import validateConfig from './validate/index';
 
 export default class MupAPI {
-  constructor(base, args, configPath, settingsPath) {
+  constructor(base, args, configPath, settingsPath, verbose) {
     this.base = base;
     this.args = args;
     this.config = null;
@@ -14,43 +15,63 @@ export default class MupAPI {
     this.sessions = null;
     this.configPath = configPath;
     this.settingsPath = settingsPath;
+    this.verbose = verbose;
   }
 
   getArgs() {
     return this.args;
   }
 
+  optionEnabled(long) {
+    return this.args.indexOf(`--${long}`) > -1;
+  }
+
   getBasePath() {
     return this.base;
   }
 
+  getVerbose() {
+    return this.verbose;
+  }
+
+  hasMeteorPackage(name) {
+    // Check if app is using the package
+    try {
+      var contents = fs
+        .readFileSync(resolvePath(this.getBasePath(), this.getConfig().meteor.path, '.meteor/versions'))
+        .toString();
+      // Looks for "package-name@" in the begining of a
+      // line or at the start of the file
+      let regex = new RegExp(`(^|\\s)${name}@`, 'm');
+      return regex.test(contents);
+
+    } catch (e) {
+      console.log(`Unable to load file ${resolvePath(this.getBasePath(), this.getConfig().meteor.path, '.meteor/versions')}`);
+      return false;
+    }
+  }
+
   validateConfig(configPath) {
-    let valid = validateConfig(this.config);
+    let problems = validateConfig(this.config);
 
-    let invalid = valid.errors.length > 0 || valid.warnings.length > 0;
+    if (problems.length > 0) {
+      let red = chalk.red;
+      let plural = problems.length > 1 ? 's' : 's';
 
-    if (invalid) {
-      console.log(`loaded mup.js from ${configPath}`);
-    }
+      console.log(`loaded config from ${configPath}`);
+      console.log('');
+      console.log(red(`${problems.length} Validation Error${plural}`));
 
-    if (valid.errors.length > 0) {
-      console.log(`mup.js has ${valid.errors.length} errors:`);
-      valid.errors.forEach(error => {
-        console.log(`  - ${error}`);
+      problems.forEach(problem => {
+        console.log(red(`  - ${problem}`));
       });
-    }
-    if (valid.warnings.length > 0) {
-      console.log(`mup.js has ${valid.warnings.length} warnings:`);
-      valid.warnings.forEach(warning => {
-        console.log(`   - ${warning}`);
-      });
-    }
 
-    if (invalid) {
+      console.log('');
       console.log(
-        'If you think there is a bug in the mup.js validator, please'
+        'Read the docs and view example configs at'
       );
-      console.log('create an issue at https://github.com/zodern/meteor-up');
+      console.log('  https://zodern.github.io/meteor-up/docs');
+      console.log('');
     }
   }
 
@@ -64,7 +85,7 @@ export default class MupAPI {
         filePath = path.join(this.base, 'mup.js');
       }
       try {
-        this.config = require(filePath);
+        this.config = require(filePath); // eslint-disable-line global-require
       } catch (e) {
         if (e.code === 'MODULE_NOT_FOUND') {
           console.error('"mup.js" file not found. Run "mup init" first.');
@@ -159,8 +180,12 @@ export default class MupAPI {
       }
 
       const info = config.servers[name];
-      const auth = { username: info.username };
-      const opts = { ssh: {} };
+      const auth = {
+        username: info.username
+      };
+      const opts = {
+        ssh: {}
+      };
 
       var sshAgent = process.env.SSH_AUTH_SOCK;
 

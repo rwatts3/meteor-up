@@ -1,3 +1,7 @@
 lib
 node_modules
 .vscode
+.idea
+*.log
+docs/_site
+

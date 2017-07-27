@@ -14,6 +14,10 @@ program
   .action(argAction)
   .option('--settings <filePath>', 'Meteor settings file', setSettingsPath)
   .option('--config <filePath>', 'mup.js config file', setConfigPath)
+  .option(
+    '--verbose',
+    'Print more output while building and running tasks on server'
+  )
   .on('--help', function() {
     console.log('   Commands:');
 
@@ -106,8 +110,30 @@ function argAction(arg, subarg) {
 
   checkUpdates().then(() => {
     const base = process.cwd();
-    const api = new MupAPI(base, args, configPath, settingsPath);
-    module[command](api);
+    const api = new MupAPI(
+      base,
+      args,
+      configPath,
+      settingsPath,
+      program.verbose
+    );
+    let potentialPromise;
+    try {
+      potentialPromise = module[command](api);
+    } catch (e) {
+      console.dir(e);
+    }
+    if (potentialPromise && typeof potentialPromise.then === 'function') {
+      potentialPromise.catch(e => {
+        if (e.nodemiralHistory instanceof Array) {
+          // Error is from nodemiral when running a task list
+          // Nodemiral already displayed the error to the user
+          return;
+        }
+        console.log('error ======================');
+        console.error(e);
+      });
+    }
   });
 }
 
@@ -117,6 +143,7 @@ function argIndex(list, string) {
       return i;
     }
   }
+  return -1;
 }
 
 function handleErrors(e) {
